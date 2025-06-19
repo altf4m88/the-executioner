@@ -30,3 +30,9 @@ def create_request_log(db: Session, log: schemas.RequestLogCreate) -> models.Req
     db.commit()
     db.refresh(db_log)
     return db_log
+
+def get_questions_with_answers_by_subject(db: Session, subject_id: uuid.UUID) -> List[models.Question]:
+    """
+    Retrieves all questions for a specific subject, preloading their related task answers.
+    """
+    return db.query(models.Question).options(joinedload(models.Question.task_answers)).filter(models.Question.subject_id == subject_id).all()

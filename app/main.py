@@ -100,3 +100,60 @@ def get_all_evaluated_answers(db: Session = Depends(get_db)):
         for ans in answers if ans.status is not None
     ]
 
+def run_evaluation_for_subject_and_update_db(subject_id: str, db: Session):
+    """
+    Evaluates all answers for all questions in a specific subject.
+    """
+    import uuid as uuidlib
+    print(f"Starting evaluation for subject: {subject_id}")
+    questions = crud.get_questions_with_answers_by_subject(db, uuidlib.UUID(subject_id))
+    for question in questions:
+        if not question.task_answers:
+            print(f"Skipping question ID {question.id}: No answers to evaluate.")
+            continue
+        print(f"Processing question ID: {question.id}")
+        answers_for_eval = [
+            schemas.AnswerForEval(task_answer_id=ans.id, answer=ans.answer)
+            for ans in question.task_answers
+        ]
+        payload = schemas.EvaluationPayload(
+            question=question.question_text,
+            preferred_answer=question.preferred_answer,
+            answers=answers_for_eval
+        )
+        service_result = services.evaluate_answers_with_ai(payload)
+        if service_result:
+            for eval_result in service_result.evaluations:
+                crud.update_task_answer_status(
+                    db=db,
+                    task_answer_id=eval_result.task_answer_id,
+                    is_correct=eval_result.correct
+                )
+            print(f"Successfully evaluated {len(service_result.evaluations)} answers for question ID {question.id}")
+            log_entry = schemas.RequestLogCreate(
+                request_time=service_result.duration,
+                question_count=len(question.task_answers),
+                prompt_token_count=service_result.prompt_tokens,
+                candidates_token_count=service_result.candidates_tokens,
+                total_token_count=service_result.total_tokens,
+                question_id=question.id
+            )
+            crud.create_request_log(db=db, log=log_entry)
+            print(f"Successfully created request log for question ID {question.id}")
+        else:
+            print(f"Failed to get evaluations for question ID {question.id}")
+        print("turu dulu 10 detik")
+        import time
+        time.sleep(10)
+    print("Subject evaluation task finished.")
+
+@app.post("/evaluate/subject/{subject_id}", status_code=202)
+def trigger_subject_evaluation(subject_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Triggers a background task to evaluate all answers for all questions in a specific subject.
+    """
+    background_tasks.add_task(run_evaluation_for_subject_and_update_db, subject_id, db)
+    return {
+        "message": f"Evaluation process for subject {subject_id} started in the background. The `status` field in the `task_answers` table will be updated upon completion."
+    }
+
