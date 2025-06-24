@@ -69,8 +69,9 @@ def run_evaluation_and_update_db(db: Session):
         else:
             print(f"Failed to get evaluations for question ID {question.id}")
 
-        print("turu dulu 10 detik")
-        time.sleep(10)
+        # rate limiting purpose
+        print("turu dulu 2 detik")
+        time.sleep(2)
     
     print("Background evaluation task finished.")
 
@@ -142,9 +143,8 @@ def run_evaluation_for_subject_and_update_db(subject_id: str, db: Session):
             print(f"Successfully created request log for question ID {question.id}")
         else:
             print(f"Failed to get evaluations for question ID {question.id}")
-        print("turu dulu 10 detik")
-        import time
-        time.sleep(10)
+        print("turu dulu 2 detik")
+        time.sleep(2)
     print("Subject evaluation task finished.")
 
 @app.post("/evaluate/subject/{subject_id}", status_code=202)
